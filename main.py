@@ -1,8 +1,7 @@
-import my_constants as consts, email.utils
+import my_constants as consts, email.utils, re
 from selenium import webdriver
-from selenium.common.exceptions import StaleElementReferenceException
+from time import sleep
 
-#questions: validate phone-numbers? hyphened, israeli? save mail text to mongo?
 email_addresses_list = []
 
 def create_browser():
@@ -69,21 +68,31 @@ def sift_mails():
     selector = 'span[data-test-id="message-subject"][title*="הגשת מועמדות"]'
     mail_list = browser.find_elements_by_css_selector(selector)
     for index in range(len(mail_list)):
-        # try:
         click_element(mail_list[index])
-        # except StaleElementReferenceException:
-        #     mail_list = browser.find_elements_by_css_selector(selector)
-        #     click_element(mail_list[index])
         address = validate_address(parse_mail_text())
         if address != '':
             email_addresses_list.append(address)
         selector = 'span[data-test-id="message-subject"][title*="הגשת מועמדות"]'
         mail_list = browser.find_elements_by_css_selector(selector)
-            # email_addressess.append(address)
-        # return email_addressess
+
+
+def look_for_phone():
+    selector = 'div[class="jb_0 X_6MGW N_6Fd5"]'
+    mail_body = browser.find_element_by_css_selector(selector)
+    text = mail_body.text.replace('\n', ' ').replace('-','')
+    words = text.split(' ')
+    for word in words:
+        if word.isdigit():
+            print(word)
+            sleep(2)
+            return True
+    print('No phone')
+    sleep(2)
+    return False
 
 
 def parse_mail_text():
+    look_for_phone()
     selector = 'div[class="jb_0 X_6MGW N_6Fd5"]'
     mail_body = browser.find_element_by_css_selector(selector)
     address = get_email_addresss(mail_body)
@@ -116,12 +125,12 @@ def send_reply():
     selector = 'a[data-test-id="compose-button"]'
     compose_button = get_element_by_selector(selector)
     click_element(compose_button)
-    selector = 'input[id="message-to-field"]'
-    recipient_box = get_element_by_selector(selector)
-    selector = 'input[data-test-id="compose-subject"]'
-    message_subject = get_element_by_selector(selector)
-    selector = 'button[data-test-id="compose-send-button"]'
-    send_button = get_element_by_selector(selector)
+    # selector = 'input[id="message-to-field"]'
+    # recipient_box = get_element_by_selector(selector)
+    # selector = 'input[data-test-id="compose-subject"]'
+    # message_subject = get_element_by_selector(selector)
+    # selector = 'button[data-test-id="compose-send-button"]'
+    # send_button = get_element_by_selector(selector)
 
     for index in range(len(email_addresses_list)):
         selector = 'a[data-test-id="compose-button"]'
@@ -139,14 +148,13 @@ def send_reply():
         click_element(send_button)
         print(f'reply sent to {reply_address}')
 
-
 browser = create_browser()
 enter_mail_page()
 enter_mail()
 sift_mails()
-#validate_phone()
+# look_for_phone()
 #save_to_data_base()
-send_reply()
+# send_reply()
 
 # if __name__ == '__main__':
 #     pass
