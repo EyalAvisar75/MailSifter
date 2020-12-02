@@ -1,4 +1,5 @@
-import my_constants as consts, email.utils, re
+import my_constants as consts, email.utils
+import emails_db as db, random
 from selenium import webdriver
 from time import sleep
 
@@ -46,14 +47,23 @@ def enter_mail():
 def validate_address(address):
     if len(address) < len('a@b.c'):
         return ''
-    for index in range(len(address)):
+    length = len(address)
+    index = 0
+    while index in range(length):
         if address[index].lower() not in "abcdefghijklmnopqrstuvwxyz@.!#$%&*+-/=?^_`{|}~0123456789":
-            address = address[:index]
-            break
+            temp_address = address[:index]
+            if len(temp_address) < 6:
+                address = address[index + 1:]
+                length = len(address)
+                index -= 1
+            else:
+                address = temp_address
+                break
+        index += 1
 
     if '.' not in address or '@' not in address:
         return ''
-    if address[0] == '.':
+    if address[0] == '.' or address[0] == '@':
         return ''
     if address.count('@') > 1:
         return ''
@@ -62,21 +72,31 @@ def validate_address(address):
     return address
 
 
-
 def sift_mails():
-    # email_addressess = []
     selector = 'span[data-test-id="message-subject"][title*="הגשת מועמדות"]'
     mail_list = browser.find_elements_by_css_selector(selector)
-    for index in range(len(mail_list)):
+
+    index = 0
+    while index in range(len(mail_list)):
         click_element(mail_list[index])
+        print('clicked ', index + 1, 'out of', len(mail_list))
+        index += 1
+
         address = validate_address(parse_mail_text())
         if address != '':
-            email_addresses_list.append(address)
+            email_addresses_list[-1].append(address)
+            print('email list after append: ',email_addresses_list)
+        else:
+            if len(email_addresses_list) > 0:
+                if len(email_addresses_list[-1]) < 2:
+                    email_addresses_list.pop()
+                    print('email list after pop: ', email_addresses_list)
         selector = 'span[data-test-id="message-subject"][title*="הגשת מועמדות"]'
         mail_list = browser.find_elements_by_css_selector(selector)
+        print('mail_list length', len(mail_list))
 
 
-def look_for_phone():
+def check_for_phone():
     selector = 'div[class="jb_0 X_6MGW N_6Fd5"]'
     mail_body = browser.find_element_by_css_selector(selector)
     text = mail_body.text.replace('\n', ' ').replace('-','')
@@ -92,47 +112,61 @@ def look_for_phone():
 
 
 def parse_mail_text():
-    look_for_phone()
+    if not check_for_phone():
+        return return_to_inbox('')
+
     selector = 'div[class="jb_0 X_6MGW N_6Fd5"]'
     mail_body = browser.find_element_by_css_selector(selector)
-    address = get_email_addresss(mail_body)
-    #return to inbox
+    address = get_email_address(mail_body)
+    if address != '':
+        email_addresses_list.append([mail_body.text])
+        print(email_addresses_list)
+    return return_to_inbox(address)
+
+
+def return_to_inbox(result):
     selector = 'span[data-test-folder-name="Inbox"]'
     inbox_button = browser.find_element_by_css_selector(selector)
     click_element(inbox_button)
-    return address
+    return result
 
 
-def get_email_addresss(mail_body):
-    email_addresses = email.utils.getaddresses([mail_body.text])
+def get_email_address(mail_body):
+    text = mail_body.text.replace('\n', ' , ').replace('-',' ')
+    email_addresses = email.utils.getaddresses([text])
     for tuple_element in email_addresses:
         if tuple_element[1] != '' and '@' in tuple_element[1]:
             if ' ' in tuple_element[1]:
                 words = tuple_element[1].split(' ')
                 for word in words:
                     if '@' in word:
+                        print('email:', word)
                         return word
             else:
+                print('email:', tuple_element[1])
                 return tuple_element[1]
+    print('No address')
+    return ''
+
+
+def save_applicant_to_db(index):
+    applicant = {
+        'email_address': email_addresses_list[index][1],
+        'email_text': email_addresses_list[index][0]
+    }
+    db.push_entry(applicant)
 
 
 def send_reply():
-    reply_address = 'enfer0666@gmail.com'
+    # reply_address = 'enfer0666@gmail.com'
+    print('email_addresses_list length: ', len(email_addresses_list))
     reply = 'Your application has been received and is being examined, good luck, john doe'
-    #<input role="combobox" aria-autocomplete="both" aria-owns="react-typehead-list-to" aria-expanded="false" aria-label="" id="message-to-field" class="select-input react-typeahead-input input-to Z_N ir_0 j_n y_Z2hYGcu q_52qC k_w W_6D6F H_6NIX M_0 b_0 P_SMJKi A_6EqO D_X p_a L_0 B_0" placeholder="" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" value="">
-    #<input data-test-id="compose-subject" spellcheck="true" autocorrect="off" aria-label="Subject" placeholder="Subject" class="q_T y_Z2hYGcu je_0 jb_0 X_0 N_fq7 G_e A_6EqO C_Z281SGl ir_0 P_0 bj3_Z281SGl b_0 j_n d_72FG em_N" value="">
-    #<button tabindex="-1" class="q_Z2aVTcY e_dRA k_w r_P H_6VdP s_3mS2U en_0 M_1gLo4F V_M cZ1RN91d_n y_Z2hYGcu A_6EqO u_e69 b_0 C_52qC I4_Z29WjXl ir3_1JO2M7 it3_dRA" type="button" data-test-id="compose-send-button" title="Send this email"><span>Send</span></button>
     selector = 'a[data-test-id="compose-button"]'
     compose_button = get_element_by_selector(selector)
     click_element(compose_button)
-    # selector = 'input[id="message-to-field"]'
-    # recipient_box = get_element_by_selector(selector)
-    # selector = 'input[data-test-id="compose-subject"]'
-    # message_subject = get_element_by_selector(selector)
-    # selector = 'button[data-test-id="compose-send-button"]'
-    # send_button = get_element_by_selector(selector)
 
     for index in range(len(email_addresses_list)):
+        reply_address = email_addresses_list[index][1]
         selector = 'a[data-test-id="compose-button"]'
         compose_button = get_element_by_selector(selector)
         click_element(compose_button)
@@ -147,14 +181,20 @@ def send_reply():
         enter_input(message_subject, reply)
         click_element(send_button)
         print(f'reply sent to {reply_address}')
+        save_applicant_to_db(index)
+
 
 browser = create_browser()
 enter_mail_page()
 enter_mail()
 sift_mails()
-# look_for_phone()
-#save_to_data_base()
-# send_reply()
+send_reply()
 
+if len(email_addresses_list) > 0:
+    print('getting random entry')
+    index = random.randint(0, len(email_addresses_list) - 1)
+    db.get_entry(email_addresses_list[index][1])
+
+browser.quit()
 # if __name__ == '__main__':
 #     pass
